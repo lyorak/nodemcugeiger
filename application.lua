@@ -24,6 +24,14 @@ function i2cReadReg(dev_addr, reg_addr,len)
     return c
 end
 
+function tod2igits(val)
+    r = {}
+    r[1] = bit.band(val,0x0f)
+    r[2] = bit.arshift(val,4)
+    
+    return r
+end
+
 
 -- user defined function: write  from reg_addr content of dev_addr
 function i2cWriteReg(dev_addr, reg_addr, data)
@@ -38,15 +46,23 @@ end
 function readAndResetCounter()
     counter = i2cReadReg(i2c_addr,1,3)
     i2cWriteReg(i2c_addr,0,0xa0) -- event counter mode, reset     
-    i2cWriteReg(i2c_addr,1,{0,0,0}) -- 0 to counter     
-    
+    i2cWriteReg(i2c_addr,1,{0,0,0}) -- 0 to counter         
     i2cWriteReg(i2c_addr,0,0x20) -- event counter mode, start counting
 
-    fixed = counter:gsub("(.)(.)", "%2%1")
-    print("Received count value: 0 " .. string.byte(counter,1))
-    print("Received count value: 1 " .. string.byte(counter,2))
-    print("Received count value: 2 " .. string.byte(counter,3))
-    print("Fixed: " .. fixed)
+    --fixed = counter:gsub("(.)(.)", "%2%1")
+    d01 = string.byte(counter,1)
+    d23 = string.byte(counter,2)
+    d45 = string.byte(counter,3)
+    print("Received count value: 0 " .. d01)
+    print("Received count value: 1 " .. d23)
+    print("Received count value: 2 " .. d45)
+
+    fixed01 = tod2igits(d01)
+    fixed23 = tod2igits(d23)
+    fixed45 = tod2igits(d45)
+    fixed = fixed01[1]+10*fixed01[2]+100*fixed23[1]+1000*fixed23[2]+10000*fixed45[1]+100000*fixed45[2]
+
+    print("fixed value: " .. fixed)
     return fixed
 end
 --mqtt_username = ""
