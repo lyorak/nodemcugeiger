@@ -31,7 +31,7 @@ else
     sleepus_min = sleepus - 10*1000000
 end
 
-uptime = 0;
+uptime = 0
 
 _, reset_reason = node.bootreason()
 if reset_reason == 0 then 
