@@ -17,11 +17,17 @@ function synchTime()
            else 
                sntp.sync(ip,
                    function(sec,usec,server)
-                       tm = rtctime.epoch2cal(sec)                            
+                        --getsec,getusec = rtctime.get()
+                       --rtctime.set(sec,usec)
+                       tm = rtctime.epoch2cal(sec)  
+                       --gettm = rtctime.epoch2cal(getsec)                         
                        print(string.format("%04d/%02d/%02d %02d:%02d:%02d", tm["year"], tm["mon"], tm["day"], tm["hour"], tm["min"], tm["sec"]))
+                       --print(string.format("%04d/%02d/%02d %02d:%02d:%02d", gettm["year"], gettm["mon"], gettm["day"], gettm["hour"], gettm["min"], gettm["sec"]))
+                        startup2()
                    end,
                    function()
                        print('Getting NTP time failed!')
+                       node.dsleep(30*60*1000000) 
                    end
                    )  
            end
@@ -35,6 +41,9 @@ function startup()
     tmr.unregister(1)
     tmr.unregister(2)
     synchTime()
+end
+
+function startup2()
     if(gpio.read(waitpin) == 1) then
         
         if file.exists("application.lua") then
@@ -49,8 +58,6 @@ function startup()
         print("waiting for programmer...")
     end
 end
-
-
 
 ledstate = 1
 blinkcnt = 0
@@ -123,7 +130,7 @@ tmr.alarm(1, 1000, 1, function()
   --              rtctime.dsleep(10*60*1000000)
   --          end)
             _, reset_reason = node.bootreason()
-            if reset_reason == 0 then 
+            if reset_reason ~= 5 then 
                 --print("Power UP!")
                 getConfig()
             else

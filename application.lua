@@ -2,43 +2,71 @@ print("application started")
 
 dofile("adafruit_creds.lua")
 
+--getsec,getusec = rtctime.get()
+--gettm = rtctime.epoch2cal(getsec)
+--print(string.format("%04d/%02d/%02d %02d:%02d:%02d", gettm["year"], gettm["mon"], gettm["day"], gettm["hour"], gettm["min"], gettm["sec"]))
+
 scl_pin = 1
 sda_pin = 2
 i2c_addr = 0xa2/2
 
 tsaveslot = 16
-uptimeslot = 17
+uptimeslot = 20
+dxslot = 24
 
 sleepminutes = 10
-sleepus = sleepminutes*60*1000000-3*1000000
-sleepus_min = sleepus - 10*1000000
+sleepsec = sleepminutes * 60
+--sleepus = sleepsec*1000000-3*1000000
+--sleepus_min = sleepus - 10*1000000
 
 -- initialize i2c
 i2c.setup(0, sda_pin, scl_pin, i2c.SLOW)
 
 nowsec,nowusec = rtctime.get()
+--print("nowsec: " .. nowsec)
 wassec = rtcmem.read32(tsaveslot)
 rtcmem.write32(tsaveslot,nowsec)
 
-difmin = (nowsec-wassec)/60
+difsec = nowsec-wassec
 
-if(math.abs(sleepminutes-difmin) > 1) then
-    print("new time is saved")
+
+if(math.abs(sleepsec-difsec) > 60) then
+    print("new time is saved.")
     wassec = nowsec - 60*sleepminutes
+    dx = 1000000
+    --rtcmem.write32(dxslot,dx)
 else
-    ratio = (sleepminutes * 60)/(nowsec-wassec)
-    sleepus = sleepus*ratio
-    sleepus_min = sleepus - 10*1000000
+--    print("ex sleepus: " .. sleepus)
+--    print("difsec " .. difsec)
+--    print("sleepminutes x 60 = " .. sleepsec)
+--    sleepus = (sleepus*sleepsec)/difsec
+--    print("new sleepus: " .. sleepus)
+    dx = rtcmem.read32(dxslot)
+    dx = dx*sleepsec/difsec
+    print("dx: " .. dx)
 end
+rtcmem.write32(dxslot,dx)
+
+sleepus = sleepsec*dx
 
 uptime = 0
+--or math.abs(uptime - (365*24*60*60)) > 0
 
-_, reset_reason = node.bootreason()
-if reset_reason == 0 then 
+_,reset_reason = node.bootreason()
+--print("rawreset: " .. rawreset)
+--print("detailed reset: ", reset_reason)
+
+if reset_reason ~= 5 then 
     print("Power UP!") 
     rtcmem.write32(uptimeslot,nowsec)
 else 
-    uptime = nowsec - rtcmem.read32(uptimeslot)
+--    print("wake from sleep!")
+    uptime = rtcmem.read32(uptimeslot)  
+--    print("Uptime read: " .. uptime)
+--    print("nowtime: " .. nowsec)
+    uptime = nowsec- uptime
+--    print("Uptime calc: " .. uptime) 
+    
 end
     
 -- user defined function: read from reg_addr content of dev_addr len x bytes
@@ -94,7 +122,7 @@ function readAndResetCounter()
     fixed = fixed01[1]+10*fixed01[2]+100*fixed23[1]+1000*fixed23[2]+10000*fixed45[1]+100000*fixed45[2]
 
  --   print("fixed value: " .. fixed)
-    return ((fixed * 60) / (nowsec-wassec)) 
+    return ((fixed * 60) / difsec) 
 end
 --mqtt_username = ""
 --mqtt_password = ""
