@@ -6,14 +6,41 @@ scl_pin = 1
 sda_pin = 2
 i2c_addr = 0xa2/2
 
-sleepminutes = 1
-sleepus = sleepminutes*60*1000000
-sleepus_min = 100 --(sleepminutes-2)*60*1000000
+tsaveslot = 16
+uptimeslot = 17
+
+sleepminutes = 10
+sleepus = sleepminutes*60*1000000-3*1000000
+sleepus_min = sleepus - 10*1000000
 
 -- initialize i2c
 i2c.setup(0, sda_pin, scl_pin, i2c.SLOW)
 
+nowsec,nowusec = rtctime.get()
+wassec = rtcmem.read32(tsaveslot)
+rtcmem.write32(tsaveslot,nowsec)
 
+difmin = (nowsec-wassec)/60
+
+if(math.abs(sleepminutes-difmin) > 1) then
+    print("new time is saved")
+    wassec = nowsec - 60*sleepminutes
+else
+    ratio = (sleepminutes * 60)/(nowsec-wassec)
+    sleepus = sleepus*ratio
+    sleepus_min = sleepus - 10*1000000
+end
+
+uptime = 0;
+
+_, reset_reason = node.bootreason()
+if reset_reason == 0 then 
+    print("Power UP!") 
+    rtcmem.write32(uptimeslot,nowsec)
+else 
+    uptime = nowsec - rtcmem.read32(uptimeslot)
+end
+    
 -- user defined function: read from reg_addr content of dev_addr len x bytes
 function i2cReadReg(dev_addr, reg_addr,len)
    -- print("dev_addr: " .. dev_addr)   
@@ -67,7 +94,7 @@ function readAndResetCounter()
     fixed = fixed01[1]+10*fixed01[2]+100*fixed23[1]+1000*fixed23[2]+10000*fixed45[1]+100000*fixed45[2]
 
  --   print("fixed value: " .. fixed)
-    return (fixed / sleepminutes)
+    return ((fixed * 60) / (nowsec-wassec)) 
 end
 --mqtt_username = ""
 --mqtt_password = ""
@@ -91,9 +118,18 @@ m:on("offline", function(client) print ("offline") end)
 
 function goSleep()
     print("Now should be sleeping...")
-    tmr.delay(1000)
+    gpio.mode(scl_pin,gpio.INPUT,gpio.PULLUP)
+    gpio.mode(sda_pin,gpio.INPUT,gpio.PULLUP)
+    --gpio.write(scl_pin,gpio.HIGH)
+    --gpio.write(sda_pin,gpio.HIGH)
+    tmr.delay(10000)
     --gpio.write(4,gpio.HIGH)
-    rtctime.dsleep_aligned(sleepus,sleepus_min)
+    --rtctime.dsleep_aligned(sleepus,sleepus_min)
+    node.dsleep(sleepus)
+end
+
+function publishToAdaUptime()
+    m:publish(mqtt_username .. "/feeds/" .. mqtt_feedname_uptime,uptime,0,0,goSleep)
 end
 
 function publishToAdaIOCPM(cpm)
@@ -101,10 +137,10 @@ function publishToAdaIOCPM(cpm)
 end
 
 function publishToAdaIOVbat()
-    m:publish(mqtt_username .. "/feeds/" .. mqtt_feedname_vbat,adc.readvdd33(0),0,0,goSleep)
+    m:publish(mqtt_username .. "/feeds/" .. mqtt_feedname_vbat,adc.readvdd33(0),0,0,publishToAdaUptime)
 end
 
-cpm = rtcmem.read32(10)
+--cpm = rtcmem.read32(10)
 
 function onConnected(client)
     print("Connected")
@@ -112,7 +148,7 @@ function onConnected(client)
     cpm = readAndResetCounter()
     print("publishing data ...")
     publishToAdaIOCPM(cpm)
-    rtcmem.write32(10,cpm)
+    --rtcmem.write32(10,cpm)
 end
 
 function onFailed(client,reason)
